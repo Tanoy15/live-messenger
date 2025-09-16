@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>🔥 Live Chat App</title>
+</head>
+<body>
+  <script type="module">
+    // Firebase SDK Imports
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+    import { 
+      getAuth, 
+      signInWithPopup, 
+      GoogleAuthProvider, 
+      onAuthStateChanged 
+    } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+    import { 
+      getDatabase, 
+      ref, 
+      set, 
+      push, 
+      onValue, 
+      update, 
+      remove, 
+      get 
+    } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
+
+    // ✅ তোমার Firebase Config বসাও (Firebase Console → Project Settings → SDK setup থেকে কপি করো)
+    const firebaseConfig = {
+      apiKey: "AIzaSyA3FQKcDslDCbEQNd-9cTaaHH-cVcsW1g4",
+      authDomain: "tanoy-b0503.firebaseapp.com",
+      databaseURL: "https://tanoy-b0503-default-rtdb.firebaseio.com",
+      projectId: "tanoy-b0503",
+      storageBucket: "tanoy-b0503.appspot.com",
+      messagingSenderId: "404921656735",
+      appId: "1:404921656735:web:57b49fad772fdffe0809aa",
+      measurementId: "G-T6L82X7NWY"
+    };
+
+    // Firebase Init
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const provider = new GoogleAuthProvider();
+    const db = getDatabase(app);
+
+    let currentUser = null;
+
+    // 🌈 UI Styling
+    const root = document.body;
+    root.style.margin = "0";
+    root.style.height = "100vh";
+    root.style.display = "flex";
+    root.style.alignItems = "center";
+    root.style.justifyContent = "center";
+    root.style.background = "linear-gradient(135deg,#0f2027,#203a43,#2c5364)";
+    root.style.color = "#fff";
+    root.style.fontFamily = "Arial, sans-serif";
+
+    const container = document.createElement("div");
+    container.style.width = "400px";
+    container.style.minHeight = "500px";
+    container.style.background = "rgba(255,255,255,0.05)";
+    container.style.backdropFilter = "blur(10px)";
+    container.style.borderRadius = "15px";
+    container.style.padding = "20px";
+    container.style.boxShadow = "0 0 20px rgba(0,0,0,0.5)";
+    root.appendChild(container);
+
+    const title = document.createElement("h2");
+    title.innerText = "🔥 Live Chat";
+    title.style.textAlign = "center";
+    container.appendChild(title);
+
+    const content = document.createElement("div");
+    container.appendChild(content);
+
+    // 🔑 Login
+    function showLogin() {
+      content.innerHTML = "";
+      const btn = document.createElement("button");
+      btn.innerText = "Sign in with Google";
+      btn.style.padding = "10px 20px";
+      btn.style.border = "none";
+      btn.style.borderRadius = "10px";
+      btn.style.cursor = "pointer";
+      btn.style.background = "#4285F4";
+      btn.style.color = "#fff";
+      btn.onclick = () => {
+        signInWithPopup(auth, provider)
+          .then(result => {
+            currentUser = result.user;
+            checkUsername();
+          })
+          .catch(err => alert("❌ Login Failed: " + err.message));
+      };
+      content.appendChild(btn);
+    }
+
+    // 👤 Username Check
+    function checkUsername() {
+      const userRef = ref(db, "users/" + currentUser.uid);
+      get(userRef).then(snapshot => {
+        if (snapshot.exists() && snapshot.val().name) {
+          showContacts();
+        } else {
+          showUsernameInput();
+        }
+      });
+    }
+
+    function showUsernameInput() {
+      content.innerHTML = "";
+      const input = document.createElement("input");
+      input.placeholder = "Enter username";
+      input.style.width = "90%";
+      input.style.padding = "10px";
+      input.style.margin = "10px 0";
+      input.style.borderRadius = "10px";
+      const btn = document.createElement("button");
+      btn.innerText = "OK";
+      btn.style.padding = "10px 20px";
+      btn.style.background = "#34A853";
+      btn.style.color = "#fff";
+      btn.style.border = "none";
+      btn.style.borderRadius = "10px";
+      btn.onclick = () => {
+        const name = input.value.trim();
+        if (!name) return alert("Enter valid name!");
+        set(ref(db, "users/" + currentUser.uid), { name, online: true });
+        showContacts();
+      };
+      content.appendChild(input);
+      content.appendChild(btn);
+    }
+
+    // 📞 Contact List
+    function showContacts() {
+      content.innerHTML = "<h3>Contacts</h3>";
+      const list = document.createElement("div");
+      list.style.display = "flex";
+      list.style.flexDirection = "column";
+      list.style.gap = "8px";
+      content.appendChild(list);
+
+      const contactsRef = ref(db, "users");
+      onValue(contactsRef, snapshot => {
+        list.innerHTML = "";
+        snapshot.forEach(child => {
+          const data = child.val();
+          if (child.key === currentUser.uid) return;
+          const btn = document.createElement("button");
+          btn.innerText = data.name + (data.online ? " (Online)" : " (Offline)");
+          btn.style.padding = "10px";
+          btn.style.border = "none";
+          btn.style.borderRadius = "10px";
+          btn.style.cursor = "pointer";
+          btn.style.background = data.online ? "#0F9D58" : "#555";
+          btn.style.color = "#fff";
+          btn.onclick = () => startChat(child.key, data.name);
+          list.appendChild(btn);
+        });
+      });
+    }
+
+    // 💬 Chat
+    function startChat(chatWithUid, chatWithName) {
+      content.innerHTML = "";
+      const header = document.createElement("h3");
+      header.innerText = "Chat with " + chatWithName;
+      content.appendChild(header);
+
+      const messagesDiv = document.createElement("div");
+      messagesDiv.style.height = "300px";
+      messagesDiv.style.overflowY = "auto";
+      messagesDiv.style.display = "flex";
+      messagesDiv.style.flexDirection = "column";
+      messagesDiv.style.gap = "6px";
+      messagesDiv.style.padding = "10px";
+      messagesDiv.style.background = "rgba(0,0,0,0.2)";
+      messagesDiv.style.borderRadius = "10px";
+      content.appendChild(messagesDiv);
+
+      const typingDiv = document.createElement("div");
+      typingDiv.style.height = "20px";
+      typingDiv.style.color = "yellow";
+      content.appendChild(typingDiv);
+
+      const inputDiv = document.createElement("div");
+      inputDiv.style.display = "flex";
+      inputDiv.style.marginTop = "10px";
+
+      const input = document.createElement("input");
+      input.placeholder = "Type message...";
+      input.style.flex = "1";
+      input.style.padding = "10px";
+      input.style.borderRadius = "10px 0 0 10px";
+
+      const sendBtn = document.createElement("button");
+      sendBtn.innerText = "Send";
+      sendBtn.style.padding = "10px 20px";
+      sendBtn.style.border = "none";
+      sendBtn.style.borderRadius = "0 10px 10px 0";
+      sendBtn.style.background = "#4285F4";
+      sendBtn.style.color = "#fff";
+
+      inputDiv.appendChild(input);
+      inputDiv.appendChild(sendBtn);
+      content.appendChild(inputDiv);
+
+      const chatId = [currentUser.uid, chatWithUid].sort().join("_");
+      const chatRef = ref(db, "chats/" + chatId);
+      const typingRef = ref(db, "typing/" + chatId);
+
+      onValue(chatRef, snapshot => {
+        messagesDiv.innerHTML = "";
+        snapshot.forEach(child => {
+          const msg = child.val();
+          const div = document.createElement("div");
+          div.innerText = msg.text;
+          div.style.padding = "8px";
+          div.style.borderRadius = "10px";
+          div.style.maxWidth = "70%";
+          div.style.alignSelf = msg.sender === currentUser.uid ? "flex-end" : "flex-start";
+          div.style.background = msg.sender === currentUser.uid ? "rgba(52,168,83,0.8)" : "rgba(0,0,0,0.5)";
+          div.style.color = "#fff";
+          if (msg.sender === currentUser.uid) {
+            div.onclick = () => {
+              if (confirm("Delete this message?")) {
+                remove(ref(db, "chats/" + chatId + "/" + child.key));
+              }
+            };
+          }
+          messagesDiv.appendChild(div);
+        });
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+      });
+
+      input.addEventListener("input", () => {
+        update(typingRef, { [currentUser.uid]: input.value.length > 0 });
+      });
+
+      onValue(typingRef, snapshot => {
+        let typing = false;
+        snapshot.forEach(child => {
+          if (child.key !== currentUser.uid && child.val()) typing = true;
+        });
+        typingDiv.innerText = typing ? chatWithName + " is typing..." : "";
+      });
+
+      sendBtn.onclick = () => {
+        const text = input.value.trim();
+        if (!text) return;
+        push(chatRef, { sender: currentUser.uid, text });
+        input.value = "";
+        update(typingRef, { [currentUser.uid]: false });
+      };
+    }
+
+    // 🔄 Auth Observer
+    onAuthStateChanged(auth, user => {
+      if (user) {
+        currentUser = user;
+        const userRef = ref(db, "users/" + user.uid);
+        update(userRef, { online: true });
+        window.addEventListener("beforeunload", () => {
+          update(userRef, { online: false });
+        });
+        checkUsername();
+      } else {
+        showLogin();
+      }
+    });
+  </script>
+</body>
+</html>
